@@ -17,24 +17,134 @@ applies; this fork follows upstream releases (currently **v0.11.0**).
 
 ### Sources added
 
-| Menu item | Port | What it does | Needs |
-| --- | --- | --- | --- |
-| **WEATHER** | 8790 | Hourly forecast, today's temperature range and rain outlook from DMI Open Data, plus a looping precipitation radar. Falls back to the same DMI model via Open-Meteo when DMI's API answers "server is busy", which it does for hours at a time. | Latitude/longitude |
-| **CALENDAR** | 8791 | Read-only agenda from a Google Calendar's secret iCal URL: recurring events, all-day events, exceptions, and several calendars merged into one list. | iCal URL |
-| **DR NYHEDER** | 8792 | Headlines from DR's public RSS feeds with the article text fetched for reading on the device. | — |
-| **TO-DO** / HUSKELISTE | 8793 | Shared to-do list, ticked off on the device and edited from a phone page. | — |
-| **CONTACTS** / KONTAKTER | 8794 | Contacts on the arc with picture and birthday, edited from a phone page. | — |
-| **DASHBOARD** / OVERBLIK | 8795 | One screen with clock, what is playing, device status and the electricity price hour by hour for today and tomorrow. | — |
+Each one is switched on from the config page like any other source and keeps to its own
+port, so it never collides with an upstream source.
 
-Each one is switched on from the config page like any other source, and keeps to its own
-port so it never collides with an upstream source.
+#### WEATHER — port 8790
+
+The current temperature with today's range, cloud cover and wind, whether rain is expected
+today and how much, an hour-by-hour strip, and below it a looping precipitation radar
+(RainViewer tiles on an OpenStreetMap base) centred on your position.
+
+- **Data:** DMI Open Data's Forecast EDR API, the HARMONIE DINI model. No API key.
+- **When DMI says no:** it answers `429 Server is busy` for hours at a time — the same DMI
+  model is then fetched through [Open-Meteo](https://open-meteo.com/en/docs/dmi-api) and the
+  page credits whichever one served the forecast. A failed fetch is retried after 1, 2, 5,
+  10, 20 and then 30 minutes rather than waiting out the full refresh interval.
+- **Config:** `latitude`, `longitude`, and an optional `location_name` shown instead of the
+  coordinates.
+- Needs an internet connection. Danish and English.
+
+#### CALENDAR — port 8791
+
+An agenda of what is coming up, grouped by day with "Today" and "Tomorrow" spelled out,
+times, location and which calendar an event came from.
+
+- **Data:** a calendar's *secret iCal URL*, not the Google Calendar API — so there is no
+  OAuth client to register, no consent screen to complete on a device with no keyboard, and
+  no tokens to refresh. Recurring events, their exceptions and all-day events are expanded
+  on the device; several calendars merge into one list.
+- **Read-only by design:** the device never writes to your calendar.
+- **Config:** `url` (Google Calendar → Settings for my calendars → Integrate calendar →
+  "Secret address in iCal format"), optional `calendars` for more of them, `days_ahead`
+  (1–365) and `timezone`. See [docs/google-calendar.md](docs/google-calendar.md).
+- **Treat the URL as a password:** anyone holding it can read that calendar.
+- Needs an internet connection. Danish and English.
+
+#### DR NYHEDER — port 8792
+
+Headlines from DR's public RSS sections, browsable on the arc and opened as full page views,
+the same shape upstream's Guardian news source uses.
+
+- **Data:** DR's feeds carry no body text, so each article page is fetched once and its text
+  read out of the page's own embedded data, then cached per link — a refresh only fetches
+  articles it has not seen. Four at a time, to stay gentle on both DR and the Pi.
+- **Config:** optional `feeds` list (defaults to senestenyt, indland, udland, politik, penge,
+  kultur, viden, sporten).
+- **Limits:** video-only items are skipped since they have no text; sport items that point
+  into a live blog show that post. Because the text is read out of dr.dk's own pages, a
+  redesign there can break it — the service logs it when most articles come back empty.
+- Needs an internet connection. The articles are Danish; the surrounding view is upstream's
+  and stays in English.
+
+#### TO-DO / HUSKELISTE — port 8793
+
+A shared list: add and edit the items from a phone, see them on the arc, where GO ticks an
+item off and "Clear ticked" clears the done ones.
+
+- **Home network only.** The phone page is at `http://<device-ip>:8793/` and, like every
+  other page the device serves, it has no login — anyone on your network can open it.
+  **Do not port-forward it.** It does guard against the attacks a home network is still open
+  to from a browser: a request has to be addressed to the device itself (DNS-rebinding
+  guard), may not come from another site (Origin check), changes need a JSON body, the page
+  ships a strict CSP and list text is never rendered as HTML. Page and API share the one
+  port on purpose, so access from outside can later be added by putting exactly that port
+  behind an authenticating tunnel, without exposing anything else on the device.
+- **Storage:** `~/.beosound5c_todo.json` on the device, mode 0600, rewritten atomically.
+- Danish and English; on "auto" the phone page follows the phone's own language.
+
+#### CONTACTS / KONTAKTER — port 8794
+
+The household's contacts on the arc, each tile with a picture when one has been added, and
+GO opens the details: phone, e-mail, address, birthday and a note. Edited from a phone page
+at `http://<device-ip>:8794/`, linked from the config page.
+
+- **Home network only**, with the same guards as the to-do list — and one more: contacts are
+  personal data, so this service never answers another site's page with a CORS grant. Only
+  the device's own UI and the phone page can read them.
+- **Pictures** are re-encoded when uploaded, which also strips the phone's EXIF and GPS data.
+- **Storage:** `~/.beosound5c_contacts.json` and `~/.beosound5c_contacts_photos/`, mode 0600.
+- Danish and English.
+
+#### DASHBOARD / OVERBLIK — port 8795
+
+One screen to glance at rather than browse: clock and date, what is playing, how the device
+itself is doing (uptime, CPU temperature, load, memory, disk, network address) and the
+electricity price hour by hour for today and tomorrow.
+
+- **Electricity prices** come from [Strømligning](https://stromligning.dk)'s public API (no
+  key) as all-in prices per kWh — spot price plus your net company's tariffs, taxes and VAT.
+  Tomorrow's are their forecast until the real prices are published around 13:00. **Denmark
+  only.**
+- **Config:** `electricity_supplier` (your net company's id on stromligning.dk, the
+  `netselskab=` value in its links, e.g. `dinel_c`) and `electricity_area`, DK1 west of the
+  Great Belt or DK2 east. Without a supplier the page simply leaves the prices out.
+- **Costs nothing when idle:** prices are fetched when the page asks and at most every 15
+  minutes, and the device data is read from `/proc` on request. Nothing polls in the
+  background. Every field is optional — a part that cannot be read is left out rather than
+  breaking the page.
+- Danish and English.
 
 ### Other additions
 
-- **Device language, Danish or English.** One setting in the config UI translates the arc
-  menu and every added view; `auto` follows the phone or browser.
-- **Bluetooth speaker output.** Pair a Bluetooth speaker from the config page and use it as
-  the device's output, with its own volume adapter. Pairings survive standby.
+#### Device language — Danish or English
+
+One setting in the config UI. `auto` follows the browser or the phone; `da` and `en` force
+it. It covers the arc menu labels and the views this fork added or translated — Weather,
+Calendar, Dashboard, Radio, To-do and Contacts, including the two phone pages. Upstream's
+own views have no translation table and stay in English.
+
+#### Bluetooth speaker output
+
+Pair a Bluetooth speaker from the config page and use it as the device's audio output. It
+becomes a volume adapter like any other: the tone chain's output is pointed at the speaker
+and the volume is set through the PipeWire sink, which reaches the speaker's own amplifier
+over AVRCP when it supports that. A watch loop reconnects when the speaker has been switched
+off or carried out of range, pairing uses bonding so it survives standby, and standby
+disconnects so the speaker can sleep and other devices can borrow it.
+
+### Good to know
+
+- **The phone pages are for the home network.** To-do (8793) and Contacts (8794) have no
+  login. Keep them on the LAN; do not forward those ports.
+- **Personal data stays on the device**, in the service user's home directory with 0600
+  permissions. Nothing is sent anywhere except the requests each source makes to its own
+  source of data.
+- **Internet is needed** for the weather, the calendar, the news and the electricity prices.
+  Everything else works without it.
+- **Some of it is Denmark-shaped:** DR's news feeds and Danish electricity prices. The rest
+  works anywhere.
+- **The iCal URL is a credential.** Anyone who gets hold of it can read that calendar.
 
 ### Fixes to the upstream code
 
@@ -56,6 +166,10 @@ port so it never collides with an upstream source.
   [docs/arc-lists.md](docs/arc-lists.md).
 - **Menu:** static entries (PLAYING, SCENES, SYSTEM, SHOWING) never picked up a retranslated
   title.
+- **Audio setup:** the SD-card hardening switched WirePlumber's BlueZ monitor off, which
+  is exactly what creates a Bluetooth speaker's sink — it now stays on when a Bluetooth
+  speaker is the configured output, and the installer brings the PipeWire Bluetooth
+  plugin and `pactl` with it.
 
 ### How this fork is organised
 
