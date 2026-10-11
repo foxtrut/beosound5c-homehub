@@ -51,7 +51,7 @@ times, location and which calendar an event came from.
 - **Treat the URL as a password:** anyone holding it can read that calendar.
 - Needs an internet connection. Danish and English.
 
-#### DR NYHEDER — port 8792
+#### DR NEWS — port 8792
 
 Headlines from DR's public RSS sections, browsable on the arc and opened as full page views,
 the same shape upstream's Guardian news source uses.
@@ -67,7 +67,7 @@ the same shape upstream's Guardian news source uses.
 - Needs an internet connection. The articles are Danish; the surrounding view is upstream's
   and stays in English.
 
-#### TO-DO / HUSKELISTE — port 8793
+#### TO-DO — port 8793
 
 A shared list: add and edit the items from a phone, see them on the arc, where GO ticks an
 item off and "Clear ticked" clears the done ones.
@@ -83,7 +83,7 @@ item off and "Clear ticked" clears the done ones.
 - **Storage:** `~/.beosound5c_todo.json` on the device, mode 0600, rewritten atomically.
 - Danish and English; on "auto" the phone page follows the phone's own language.
 
-#### CONTACTS / KONTAKTER — port 8794
+#### CONTACTS — port 8794
 
 The household's contacts on the arc, each tile with a picture when one has been added, and
 GO opens the details: phone, e-mail, address, birthday and a note. Edited from a phone page
@@ -96,7 +96,7 @@ at `http://<device-ip>:8794/`, linked from the config page.
 - **Storage:** `~/.beosound5c_contacts.json` and `~/.beosound5c_contacts_photos/`, mode 0600.
 - Danish and English.
 
-#### DASHBOARD / OVERBLIK — port 8795
+#### DASHBOARD — port 8795
 
 One screen to glance at rather than browse: clock and date, what is playing, how the device
 itself is doing (uptime, CPU temperature, load, memory, disk, network address) and the
@@ -164,7 +164,7 @@ Everything here is a change to mkirsten's own code, not to something this fork a
   Jellyfin track, because the track conversion never carried one. A cache written before the
   field existed is dropped rather than serving album-less tracks forever.
 
-**The PLAYING view (AFSPILLER)**
+**The PLAYING view**
 
 - **A progress bar with elapsed and total time**, under the album line. Position and duration
   already travelled in the media payload and went unused. Nothing ticks once a second: the
