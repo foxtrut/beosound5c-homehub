@@ -148,28 +148,98 @@ disconnects so the speaker can sleep and other devices can borrow it.
 
 ### Fixes to the upstream code
 
-- **Jellyfin:** the access token travelled in the stream URL, where every player and proxy
-  on the way could log it — it goes in a header now. Tracks also carry their album name, so
-  the PLAYING view can show it.
-- **Radio:** the Danish DR channels played the wrong region (P4 København where the list
-  said Østjylland) and advertised MP3 128k while AAC was playing. Now-playing titles are
-  read from the stream's ICY metadata, the poll wakes on a station change, favourites come
-  first, and the stations that have no usable artwork got their own tiles.
-- **PLAYING view:** a progress bar with elapsed and total time taken from mpv rather than
-  from the source, the right pause glyph for locally played sources, no progress bar for
-  live radio, and a cached playback state that no longer keeps the video overlay switched
-  off.
-- **First track of a session:** the router dropped the very first metadata message, so the
-  screen stayed empty until the next track; it is replayed now.
-- **Arc lists:** leaving a view and coming back lands on the level you left instead of the
-  root. The two list implementations and their differing GO behaviour are written down in
-  [docs/arc-lists.md](docs/arc-lists.md).
-- **Menu:** static entries (PLAYING, SCENES, SYSTEM, SHOWING) never picked up a retranslated
-  title.
-- **Audio setup:** the SD-card hardening switched WirePlumber's BlueZ monitor off, which
-  is exactly what creates a Bluetooth speaker's sink — it now stays on when a Bluetooth
-  speaker is the configured output, and the installer brings the PipeWire Bluetooth
-  plugin and `pactl` with it.
+Everything here is a change to mkirsten's own code, not to something this fork added.
+
+**Jellyfin**
+
+- **The access token travelled in the stream URL**, where every player, proxy and log on the
+  way could keep it — and since Jellyfin 12.1 dropped `?api_key=` authentication it did not
+  even work: every track died 1.5–2 seconds in with the source logging "failed stream, not
+  advancing". Stream URLs are built without credentials now; the local player gets an
+  `Authorization` header instead, a networked speaker fetches the URL itself and has nowhere
+  to put a header, so it still gets `api_key` and the log says so at startup rather than
+  leaving you with a playlist that dies three seconds into every track. The playlist cache
+  that is served to the UI over the LAN no longer carries a token either.
+- **The album never reached the PLAYING view** — it showed its em-dash placeholder on every
+  Jellyfin track, because the track conversion never carried one. A cache written before the
+  field existed is dropped rather than serving album-less tracks forever.
+
+**The PLAYING view (AFSPILLER)**
+
+- **A progress bar with elapsed and total time**, under the album line. Position and duration
+  already travelled in the media payload and went unused. Nothing ticks once a second: the
+  model anchors on the last reported position and extrapolates from a monotonic clock — the
+  device boots with the previous shutdown's date and jumps when NTP lands, so wall-clock time
+  would not do — and the sweep itself is a CSS transition.
+- **The length now comes from mpv, not from the source.** Every source that hands mpv a URL
+  (Jellyfin, Plex, TIDAL, Apple Music, USB, news) pushed its own metadata with duration and
+  position defaulting to zero, so nothing ever told the UI how long the track was and the bar
+  stayed hidden.
+- **No bar for live radio.** mpv reports a duration for a live HLS stream too — it is the
+  sliding window, 129 s on DR P4, with the position tracking the live edge: a bar, moving,
+  meaning nothing. The honest test is seekability, so that is what is reported now.
+- **The pause glyph and the dimmed artwork stayed off** for everything played locally
+  (Jellyfin, Plex, TIDAL, Apple Music, USB, news, Spotify via librespot). A source registering
+  "paused" with the router never becomes a media update, so the UI believed playback was
+  still running; the state is taken from the player's own view of mpv instead.
+- **A track picked on the device lands on PLAYING**, not in the immersive full-screen view.
+  Immersive entry was built for a start that came from somewhere else — the Sonos app, a
+  BeoRemote, Home Assistant — but every start was treated that way, so choosing a track in
+  the JELLYFIN menu dropped straight out of the menu you were standing in.
+- **The immersive view keeps no progress bar.** That view is for looking at the cover; the
+  bar belongs in the PLAYING info box. While a canvas or music video plays, the overlay is
+  mirrored as flat text, and the bar's two timestamps used to collapse into each other there
+  as "1:105:22".
+- **The router's cached playback state could lie.** It said "paused" while mpv was 231 s into
+  a track and playing, and the canvas panel gates the music video on exactly that state — so
+  the video stayed off, including after a UI restart, which replays that cache. The state is
+  taken off the player's own observation now, and the panel retries when it is corrected.
+
+**Radio**
+
+- **The Danish DR channels played the wrong region:** the list said Østjylland while P4
+  København came out of the speakers.
+- **DR's HLS streams do not play on this device**, so the channels are back on Icecast — in
+  AAC 325k from the origin that works — and the subtitle no longer claims MP3 128k while AAC
+  is playing.
+- **What is playing is read from the stream's own ICY metadata**, the poll wakes on a station
+  change instead of waiting out its interval, and it is never started inside a play. The song
+  title is kept out of the immersive view, and the track field is let through to the views
+  that want it.
+- **Station names that did not fit** the arc were shortened, and the Danish stations with no
+  usable artwork got their own tiles instead of a favicon.
+- **Favourites come first**, and the whole radio UI was translated into Danish.
+- **A restart no longer leaves the room playing to an empty screen.** The player is a
+  separate service, so restarting the radio source alone — a crash, a deploy of that one
+  unit — left mpv streaming while the source came back up, loaded its last station and
+  registered "available": audio in the room, nothing on PLAYING. It now asks the player
+  what it is doing first and re-adopts the stream when the URL is one of its own, so a
+  stream Jellyfin or Spotify started is never claimed.
+
+**Arc lists and the menu**
+
+- **Leaving a view and coming back lands on the level you left**, not back at the root.
+- **The two arc list implementations disagree about what GO means**, which is now written
+  down in [docs/arc-lists.md](docs/arc-lists.md) rather than rediscovered each time.
+- **Static menu entries** (PLAYING, SCENES, SYSTEM, SHOWING) never picked up a retranslated
+  title when the language changed.
+
+**Sources and audio**
+
+- **The first track of a session was dropped.** A source that paints the view before the
+  stream starts — Jellyfin, Plex, TIDAL and Apple Music all do — had that first post thrown
+  away by the router as `inactive_source`, because the source was not registered as playing
+  yet. Polling only re-posts on a track change, so the view showed "—" for the whole first
+  track while audio played. The post is held and replayed when activation lands, which fixes
+  every source at once. Such drops were also logged as a plain `HTTP 200`, so the source's
+  own log looked healthy.
+- **A Bluetooth speaker could pair but never get a sink.** WirePlumber 0.5 only starts its
+  BlueZ monitor for a user with an active seat session, and the device's audio stack runs
+  under a lingering `systemd --user` with nobody logged in at a seat — so `bluetoothd`
+  listed no audio UUIDs at all. Seat monitoring is turned off in a WirePlumber drop-in that
+  the installer lays down and `post-update.sh` keeps in sync, and the SD-card hardening no
+  longer disables the monitor when a Bluetooth speaker is the configured output. The
+  installer also brings the PipeWire Bluetooth plugin and `pactl`.
 
 ### How this fork is organised
 
