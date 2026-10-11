@@ -30,10 +30,10 @@ const _drNewsController = (() => {
 window.SourcePresets = window.SourcePresets || {};
 window.SourcePresets.dr_news = {
     controller: _drNewsController,
-    item: { title: 'DR NYHEDER', path: 'menu/dr_news' },
+    item: { title: 'DR NEWS', path: 'menu/dr_news' },
     after: 'menu/playing',
     view: {
-        title: 'DR NYHEDER',
+        title: 'DR NEWS',
         content: '<div id="dr-news-container" style="width:100%;height:100%;"></div>'
     },
 

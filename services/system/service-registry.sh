@@ -110,5 +110,5 @@ OPTIONAL_SOURCES=(
     "NEWS|beo-source-news.service|📰|News source"
     "RADIO|beo-source-radio.service|📻|Radio Browser source"
     "AIRPLAY|beo-source-airplay.service|📶|AirPlay source"
-    "DR NYHEDER|beo-source-dr-news.service|📰|DR News source"
+    "DR NEWS|beo-source-dr-news.service|📰|DR News source"
 )
