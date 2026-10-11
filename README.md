@@ -6,6 +6,73 @@ A modern recreation of the Bang & Olufsen BeoSound 5 experience using web techno
 
 This project replaces the original BeoSound 5 software with a circular arc-based touch UI that integrates with Sonos, Bluesound, and Denon HEOS players (plus experimental WiiM/LinkPlay and B&O Mozart/ASE), music services (Spotify, Apple Music, TIDAL, Plex, Jellyfin, AirPlay 2), and Home Assistant. It works with the original BS5 hardware (rotary encoder, laser pointer, display) and supports BeoRemote One for wireless control.
 
+## About this fork
+
+[foxtrut/beosound5c-homehub](https://github.com/foxtrut/beosound5c-homehub) turns the
+BeoSound 5 into a **home hub**: besides music it shows the weather, the family calendar,
+the news, a shared to-do list, the contacts and a dashboard — and the whole device speaks
+Danish as well as English. Everything from "Quick Start" down is
+[mkirsten's](https://github.com/mkirsten/beosound5c) original documentation and still
+applies; this fork follows upstream releases (currently **v0.11.0**).
+
+### Sources added
+
+| Menu item | Port | What it does | Needs |
+| --- | --- | --- | --- |
+| **WEATHER** | 8790 | Hourly forecast, today's temperature range and rain outlook from DMI Open Data, plus a looping precipitation radar. Falls back to the same DMI model via Open-Meteo when DMI's API answers "server is busy", which it does for hours at a time. | Latitude/longitude |
+| **CALENDAR** | 8791 | Read-only agenda from a Google Calendar's secret iCal URL: recurring events, all-day events, exceptions, and several calendars merged into one list. | iCal URL |
+| **DR NYHEDER** | 8792 | Headlines from DR's public RSS feeds with the article text fetched for reading on the device. | — |
+| **TO-DO** / HUSKELISTE | 8793 | Shared to-do list, ticked off on the device and edited from a phone page. | — |
+| **CONTACTS** / KONTAKTER | 8794 | Contacts on the arc with picture and birthday, edited from a phone page. | — |
+| **DASHBOARD** / OVERBLIK | 8795 | One screen with clock, what is playing, device status and the electricity price hour by hour for today and tomorrow. | — |
+
+Each one is switched on from the config page like any other source, and keeps to its own
+port so it never collides with an upstream source.
+
+### Other additions
+
+- **Device language, Danish or English.** One setting in the config UI translates the arc
+  menu and every added view; `auto` follows the phone or browser.
+- **Bluetooth speaker output.** Pair a Bluetooth speaker from the config page and use it as
+  the device's output, with its own volume adapter. Pairings survive standby.
+
+### Fixes to the upstream code
+
+- **Jellyfin:** the access token travelled in the stream URL, where every player and proxy
+  on the way could log it — it goes in a header now. Tracks also carry their album name, so
+  the PLAYING view can show it.
+- **Radio:** the Danish DR channels played the wrong region (P4 København where the list
+  said Østjylland) and advertised MP3 128k while AAC was playing. Now-playing titles are
+  read from the stream's ICY metadata, the poll wakes on a station change, favourites come
+  first, and the stations that have no usable artwork got their own tiles.
+- **PLAYING view:** a progress bar with elapsed and total time taken from mpv rather than
+  from the source, the right pause glyph for locally played sources, no progress bar for
+  live radio, and a cached playback state that no longer keeps the video overlay switched
+  off.
+- **First track of a session:** the router dropped the very first metadata message, so the
+  screen stayed empty until the next track; it is replayed now.
+- **Arc lists:** leaving a view and coming back lands on the level you left instead of the
+  root. The two list implementations and their differing GO behaviour are written down in
+  [docs/arc-lists.md](docs/arc-lists.md).
+- **Menu:** static entries (PLAYING, SCENES, SYSTEM, SHOWING) never picked up a retranslated
+  title.
+
+### How this fork is organised
+
+| Branch | Contents |
+| --- | --- |
+| `main` | Untouched mirror of upstream. Fast-forward only, never any of my commits. |
+| One branch per feature | `weather-source`, `calendar-source`, `dr-news`, `todo-list`, `contacts`, `dashboard`, `bluetooth-speakers`, `language-picker`, `radio`, `playing-progress`, `jellyfin-header-auth`, `jellyfin-album`, `first-track-media-drop` — each sits directly on `main`, so it can be read, rebased or dropped on its own. |
+| `device` | `main` with every feature branch merged in. Rebuilt from scratch on each upstream release, never committed to by hand. **This is the branch to run.** |
+
+To try it, install from the `device` branch instead of upstream's `main`:
+
+```bash
+git clone -b device https://github.com/foxtrut/beosound5c-homehub.git ~/beosound5c
+cd ~/beosound5c
+sudo ./install/install.sh
+```
+
 ## Quick Start
 
 Runs on a [Raspberry Pi 5 4GB](https://www.raspberrypi.com/products/raspberry-pi-5/). See [beosound5c.com](https://beosound5c.com) for full installation instructions.
