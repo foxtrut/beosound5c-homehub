@@ -83,6 +83,7 @@ MENU_LABELS = {
         "todo": "HUSKELISTE",
         "contacts": "KONTAKTER",
         "dashboard": "OVERBLIK",
+        "dr_news": "DR NYHEDER",
     },
 }
 
